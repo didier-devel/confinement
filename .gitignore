@@ -1,4 +1,5 @@
 build
 .ipynb_checkpoints
 datagouv/department_latest.csv
+datagouv/donnees_hospitalieres_latest.csv
 *~
