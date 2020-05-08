@@ -136,22 +136,21 @@ def make_curve(urgence, hosp, src_urgence, roll_urg, roll_hosp, file_radical, df
     ax.tick_params(labeltop=False, labelright=True)
 
     if src_urgence:
-        plot_non_zero(ax, logScale, urgence, "nbre_hospit_corona", "Nouvelles hospitalisations quotidiennes - données urgences")
-        ax.plot(urgence[roll_urg], label="Nouvelles hospitalisations quotidiennes lissées")
+        #plot_non_zero(ax, logScale, urgence, "nbre_hospit_corona", "Nouvelles hospitalisations quotidiennes - données urgences")
+        ax.bar(urgence.index, urgence["nbre_hospit_corona"], label = "Nouvelles hospitalisations quotidiennes - données urgences", alpha=0.3, color="blue")
+        ax.plot(urgence[roll_urg], label="Nouvelles hospitalisations quotidiennes lissées - données urgences", color="orange")
         if has_reg:
-            ax.plot(urgence["pred_hosp"], "--", label="Tendance hospitalisations quotidiennes")
-            # Intervalle de confiance sur la courbe lissée s'il y a des valeurs nulles
-            ax.fill_between(urgence.index, urgence["pred_max"], urgence["pred_min"],color="blue",alpha=0.3)
+            ax.plot(urgence["pred_hosp"], "--", label="Tendance hospitalisations quotidiennes -- données urgences", color="orange")
+            ax.fill_between(urgence.index, urgence["pred_max"], urgence["pred_min"],color="orange",alpha=0.3, label="Intervalle de confiance")
 
         # Autres données (non utilsées pour la tendance)
-        ax.plot(hosp[roll_hosp], label="Nouvelles hospitalisations quotidiennes lissées - données hôpitaux")        
+        ax.plot(hosp[roll_hosp], label="Nouvelles hospitalisations quotidiennes lissées - données hôpitaux", color="red")        
     else:
-        plot_non_zero(ax, logScale, hosp, "incid_hosp", "Nouvelles hospitalisations quotidiennes - données hôpitaux")
-        ax.plot(hosp[roll_hosp], label="Nouvelles hospitalisations quotidiennes lissées")
+        ax.bar(hosp.index, hosp["incid_hosp"], label = "Nouvelles hospitalisations quotidiennes - données hôpitaux", alpha=0.3, color="blue")
+        ax.plot(hosp[roll_hosp], label="Nouvelles hospitalisations quotidiennes lissées - données hôpitaux", color="orange")
         if has_reg:
-            ax.plot(hosp["pred_hosp"], "--", label="Tendance hospitalisations quotidiennes")
-            # Intervalle de confiance sur la courbe lissée s'il y a des valeurs nulles
-            ax.fill_between(hosp.index, hosp["pred_max"], hosp["pred_min"],color="blue",alpha=0.3)
+            ax.plot(hosp["pred_hosp"], "--", label="Tendance hospitalisations quotidiennes - données hôpitaux", color="orange")
+            ax.fill_between(hosp.index, hosp["pred_max"], hosp["pred_min"],color="orange",alpha=0.3, label="Intervalle de confiance")
         
     ax.xaxis.set_major_locator(plt.MaxNLocator(10))
     ax.xaxis.set_minor_locator(plt.MultipleLocator(1))
@@ -194,16 +193,16 @@ def aggregate(df_source, date_col):
     return df_source
     
 def make_rolling(df_source, col, recent_hist):
-    recent = df_source.loc[df_source.index[-recent_hist:]]
-    nullVals = len(recent[recent[col] == 0])
     roll_col = "rolling_%s"%col
-    if nullVals == 0:
-        # Remplacer les valeurs nulles non récentes par na (pour ne pas perturber la vue en echelle logarithmique)
-        df_source.loc[df_source[col] == 0,col] = np.nan
-        # Calculer la moyenne lissée
-        df_source[roll_col] = df_source[col].rolling(7,center=True).aggregate(lambda x: x.prod()**(1./7))
-    else:
-        df_source[roll_col] = df_source[col].rolling(7,center=True).aggregate(lambda x: x.sum()/7.)
+    nnz_col = "nnz_%s"%col
+
+    df_source[nnz_col] = df_source[col]
+    df_source.loc[df_source[nnz_col]==0,nnz_col] = 0.1
+    
+    # Calculer la moyenne lissée géométrique
+    df_source[roll_col] = df_source[nnz_col].rolling(7,center=True).aggregate(lambda x: x.prod()**(1./7))
+    # Remplacer ce qui vaut 0.1 par 0
+    df_source.loc[df_source[roll_col]<=0.101, roll_col] = 0
 
     return roll_col
 
@@ -213,18 +212,21 @@ def make_trend(df_source, hosp_col, roll_col, recent_hist):
     recent = df_source.iloc[-recent_hist:]
     nullVals = len(recent[recent[hosp_col] == 0])
 
-
-    
     if nullVals == 0:
         reg_col = hosp_col
     else:
-        # Remplacer les quelques valeurs nulles par la moyenne glissante
+        # Remplacer les valeurs nulles par 0.1 (ou 0 si la moyenne glissante vaut 0)
         reg_col = "%s_patch"%hosp_col
         df_source[reg_col] = df_source[hosp_col]
-        df_source.loc[df_source[reg_col] == 0, reg_col] = df_source.loc[df_source[reg_col] == 0, roll_col]
+        df_source.loc[df_source[reg_col] == 0, reg_col] = 0.1
+        df_source.loc[df_source[roll_col] == 0, reg_col] = 0
+        # Si plus de 2 valeurs nulles, on double aussi la période d'estimation
+        if nullVals > 2:
+            recent_hist *= 2
+        else:
+            recent_hist = int(recent_hist*1.5)
         # Update null vals
         recent = df_source.iloc[-recent_hist:]
-        nullVals = len(recent[recent[reg_col] == 0])
 
         
     # Ajouter une colonne de numéro de jour
@@ -235,7 +237,7 @@ def make_trend(df_source, hosp_col, roll_col, recent_hist):
     for_regression = df_source.iloc[-recent_hist:]
     # Si pas assez de données ne pas générer de tendance
     if len(for_regression[for_regression[reg_col] > 0]) < recent_hist*0.5:
-        return None, None, df_source, None
+        return None, None, df_source
 
 
     # Enlever les valeurs nulles ou non définies
@@ -269,38 +271,17 @@ def make_trend(df_source, hosp_col, roll_col, recent_hist):
     X_train_mean = X_train["num_jour"].mean()
     
     # Ajout de l'intervalle de confiance en log (alpha = 10% -- 1 - alpha/2 = 0.95)
-    df_source["conf_log_raw"] = np.nan
+    df_source["conf_log_mean"] = np.nan
     
-    # Plage pour l'intervalle de confiance: depuis les données utilisées pour la régerssion linéaire
-    df_source.loc[predIndex,"conf_log_raw"] = np.sqrt(1 + 1./len(X_train) + \
+    # Plage pour l'intervalle de confiance sur la moyennes: depuis les données utilisées pour la régerssion linéaire
+    df_source.loc[predIndex,"conf_log_mean"] = np.sqrt(1./len(X_train) + \
                                                       (df_source["num_jour"]-X_train_mean)**2 / ((X_train["num_jour"]-X_train_mean)**2).sum()) * \
                                                       sigma*scipy.stats.t.ppf(0.95,len(X_train)-2)
-    df_source["pred_max"] = df_source["pred_hosp"]*np.exp(df_source["conf_log_raw"])
-    df_source["pred_min"] = df_source["pred_hosp"]/np.exp(df_source["conf_log_raw"])
+    df_source["pred_max"] = df_source["pred_hosp"]*np.exp(df_source["conf_log_mean"])
+    df_source["pred_min"] = df_source["pred_hosp"]/np.exp(df_source["conf_log_mean"])
 
 
-    # On regarde si la moyenne glissante est dans l'intervalle de confiance de la moyenne
-    for_confidence_index_start = df_source.index.get_loc(for_regression.index[0])
-    for_confidence_index_end = df_source.index.get_loc(for_regression.index[-1])
-    for_confidence = df_source.iloc[for_confidence_index_start:for_confidence_index_end]
-    mean_conf = np.sqrt(1./len(X_train) + \
-                        (for_confidence["num_jour"]-X_train_mean)**2 / ((X_train["num_jour"]-X_train_mean)**2).sum()) * \
-                        sigma*scipy.stats.t.ppf(0.95,len(X_train)-2)
-    mean_conf = mean_conf.loc[for_confidence.index]
-    pred_mean = df_source.loc[for_confidence.index, "pred_hosp"]
-    verif_trend = pd.DataFrame(index=for_confidence.index)
-    verif_trend["pred_mean"] = pred_mean
-    verif_trend["mean"] = for_confidence[roll_col]
-    verif_trend["mean_min"] = pred_mean/np.exp(mean_conf) 
-    verif_trend["mean_max"] = pred_mean*np.exp(mean_conf) 
-    verif_trend["roll_over"] = pred_mean*np.exp(mean_conf) < for_confidence[roll_col] 
-    verif_trend["roll_under"] = pred_mean/np.exp(mean_conf) > for_confidence[roll_col]
-    
-    roll_out =  verif_trend["roll_over"].sum() + verif_trend["roll_under"].sum()
-    
-    trend_trusted = 0 if roll_out > 1 else 1
-
-    return for_regression.index, timeToDouble, df_source,trend_trusted
+    return for_regression.index, timeToDouble, df_source
     
 
 def make_data(urgence, hosp, file_radical, df_row, label):
@@ -320,22 +301,20 @@ def make_data(urgence, hosp, file_radical, df_row, label):
 
     # On utilise le dernier jour de la moyenne lissée pour indiquer le nombre d'hospitalisations par jour
     if src_urgence:
-        df_row["hosp_rate_urgence"] =  urgence[urgence[roll_urg] > 0 ][roll_urg][-1]
+        df_row["hosp_rate_urgence"] =  urgence[urgence[roll_urg] > 0 ][roll_urg][-1] 
         df_row["hosp_rate_all"] = hosp[hosp[roll_hosp] > 0 ][roll_hosp][-1]
     else:
         df_row["hosp_rate_all"] = hosp[hosp[roll_hosp] > 0 ][roll_hosp][-1]
 
     # make_trend modifies the dataframe (it extends the index) so we need to update the df variables
     if src_urgence:
-        urg_index, urg_timeToDouble, urgence, trend_trusted = make_trend(urgence, "nbre_hospit_corona", roll_urg, recent_hist)
+        urg_index, urg_timeToDouble, urgence = make_trend(urgence, "nbre_hospit_corona", roll_urg, recent_hist)
     else:
         # Python interpreter complains if the value is not assigned
         use_raw_urg = None
         
-    hosp_index, hosp_timeToDouble, hosp, hosp_trend_trusted = make_trend(hosp, "incid_hosp", roll_hosp, recent_hist)
+    hosp_index, hosp_timeToDouble, hosp = make_trend(hosp, "incid_hosp", roll_hosp, recent_hist)
 
-    if not src_urgence:
-        trend_trusted = hosp_trend_trusted
 
     
     
@@ -347,6 +326,11 @@ def make_data(urgence, hosp, file_radical, df_row, label):
         df_row["cont_end"]=urgence.index[cont_end_loc] if urg_index is not None else None
         df_row["cont_start"]=urgence.index[cont_start_loc] if urg_index is not None else None
         df_row["timeToDouble"] = urg_timeToDouble
+        if urgence["pred_max"][-1] > df_row["hosp_rate_urgence"]*2 and urgence["pred_min"][-1] < df_row["hosp_rate_urgence"]/2.:
+            df_row["trend_confidence"] = 0
+        else:
+            df_row["trend_confidence"] = 1
+
     else:
         df_row["reg_start"] = hosp_index[0] if hosp_index is not None else None
         df_row["reg_end"]=hosp_index[-1] if hosp_index is not None else None
@@ -355,24 +339,18 @@ def make_data(urgence, hosp, file_radical, df_row, label):
         df_row["cont_end"]=hosp.index[cont_end_loc] if hosp_index is not None else None
         df_row["cont_start"]=hosp.index[cont_start_loc] if hosp_index is not None else None
         df_row["timeToDouble"] = hosp_timeToDouble
-
-
-    df_source = urgence if src_urgence else hosp
-
-    if df_row["reg_start"] is not None:
-        if trend_trusted is not None:
-            # moyenne glissante en accord avec la tendance
-            df_row["trend_confidence"] = trend_trusted
-        else:
-            # On donne la tendance si la borne max est petite - sinon, seulement si le ration entre min et max est  inférieur à 30
-            df_row["trend_confidence"] = 1
-            if df_source["pred_max"][-1]/max(1,df_source["pred_min"][-1]) > 30:
+        if df_row["reg_start"] is not None:
+            # Pas de tendance s'il n'y avait pas assez de données pour la calculer
+            df_row["trend_confidence"] = 0
+            if hosp["pred_max"][-1] > df_row["hosp_rate_all"]*2 and hosp["pred_min"][-1] < df_row["hosp_rate_all"]/2.:
                 df_row["trend_confidence"] = 0
-                if df_source["pred_max"][df_row["reg_start"]]/max(1,df_source["pred_min"][df_row["reg_start"]]) > 30:
-                    df_row["trend_confidence"] = 0
-    else:
-        # Pas de tendance s'il n'y avait pas assez de données pour la calculer
-        df_row["trend_confidence"] = 0
+            else:
+                df_row["trend_confidence"] = 1
+        else:
+            df_row["trend_confidence"] = 0
+
+
+
 
         
     make_curve(urgence, hosp, src_urgence, roll_urg, roll_hosp, file_radical, df_row, label, True)
