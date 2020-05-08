@@ -235,7 +235,7 @@ def make_trend(df_source, hosp_col, roll_col, recent_hist):
     for_regression = df_source.iloc[-reg_hist:]
     # Si pas assez de données ne pas générer de tendance
     if len(for_regression[for_regression[reg_col] > 0]) < reg_hist*0.5:
-        return None, None, df_source, None
+        return None, None, df_source, None, None
 
 
     
@@ -286,7 +286,35 @@ def make_trend(df_source, hosp_col, roll_col, recent_hist):
     df_source["pred_max"] = df_source["pred_hosp"]*np.exp(df_source["conf_log_raw"])
     df_source["pred_min"] = df_source["pred_hosp"]/np.exp(df_source["conf_log_raw"])
 
-    return for_regression.index, timeToDouble, df_source, reg_col == hosp_col
+    trend_trusted = None
+    
+    if reg_col == hosp_col:
+        # Alors on regarde si la moyenne glissante est dans l'intervalle de confiance de la moyenne
+        for_confidence_index_start = df_source.index.get_loc(for_regression.index[0])
+        for_confidence_index_end = df_source.index.get_loc(for_regression.index[-1])
+        for_confidence = df_source.iloc[for_confidence_index_start:for_confidence_index_end]
+        mean_conf = np.sqrt(1./len(X_train) + \
+                            (for_confidence["num_jour"]-X_train_mean)**2 / ((X_train["num_jour"]-X_train_mean)**2).sum()) * \
+                            sigma*scipy.stats.t.ppf(0.95,len(X_train)-2)
+        mean_conf = mean_conf.loc[for_confidence.index]
+        pred_mean = df_source.loc[for_confidence.index, "pred_hosp"]
+        verif_trend = pd.DataFrame(index=for_confidence.index)
+        verif_trend["pred_mean"] = pred_mean
+        verif_trend["mean"] = for_confidence[roll_col]
+        verif_trend["mean_min"] = pred_mean/np.exp(mean_conf) 
+        verif_trend["mean_max"] = pred_mean*np.exp(mean_conf) 
+        verif_trend["roll_over"] = pred_mean*np.exp(mean_conf) < for_confidence[roll_col] 
+        verif_trend["roll_under"] = pred_mean/np.exp(mean_conf) > for_confidence[roll_col]
+
+        roll_out =  verif_trend["roll_over"].sum() + verif_trend["roll_under"].sum()
+
+        trend_trusted = 0 if roll_out > 1 else 1
+        if roll_out > 1:
+            print("Regression sur %s" % reg_col)
+            print(verif_trend)
+
+    
+    return for_regression.index, timeToDouble, df_source, reg_col == hosp_col, trend_trusted
     
 
 def make_data(urgence, hosp, file_radical, df_row, label):
@@ -313,12 +341,15 @@ def make_data(urgence, hosp, file_radical, df_row, label):
 
     # make_trend modifies the dataframe (it extends the index) so we need to update the df variables
     if src_urgence:
-        urg_index, urg_timeToDouble, urgence, use_raw_urg = make_trend(urgence, "nbre_hospit_corona", roll_urg, recent_hist)
+        urg_index, urg_timeToDouble, urgence, use_raw_urg, trend_trusted = make_trend(urgence, "nbre_hospit_corona", roll_urg, recent_hist)
     else:
         # Python interpreter complains if the value is not assigned
         use_raw_urg = None
-    hosp_index, hosp_timeToDouble, hosp, use_raw_hosp = make_trend(hosp, "incid_hosp", roll_hosp, recent_hist)
+        
+    hosp_index, hosp_timeToDouble, hosp, use_raw_hosp, hosp_trend_trusted = make_trend(hosp, "incid_hosp", roll_hosp, recent_hist)
 
+    if not src_urgence:
+        trend_trusted = hosp_trend_trusted
 
     
     
@@ -343,12 +374,16 @@ def make_data(urgence, hosp, file_radical, df_row, label):
     df_source = urgence if src_urgence else hosp
 
     if df_row["reg_start"] is not None:
-        # On donne la tendance si la borne max est petite - sinon, seulement si le ration entre min et max est  inférieur à 30
-        df_row["trend_confidence"] = 1
-        if df_source["pred_max"][-1]/max(1,df_source["pred_min"][-1]) > 30:
-            df_row["trend_confidence"] = 0
-        if df_source["pred_max"][df_row["reg_start"]]/max(1,df_source["pred_min"][df_row["reg_start"]]) > 30:
-            df_row["trend_confidence"] = 0
+        if trend_trusted is not None:
+            # moyenne glissante en accord avec la tendance
+            df_row["trend_confidence"] = trend_trusted
+        else:
+            # On donne la tendance si la borne max est petite - sinon, seulement si le ration entre min et max est  inférieur à 30
+            df_row["trend_confidence"] = 1
+            if df_source["pred_max"][-1]/max(1,df_source["pred_min"][-1]) > 30:
+                df_row["trend_confidence"] = 0
+                if df_source["pred_max"][df_row["reg_start"]]/max(1,df_source["pred_min"][df_row["reg_start"]]) > 30:
+                    df_row["trend_confidence"] = 0
     else:
         # Pas de tendance s'il n'y avait pas assez de données pour la calculer
         df_row["trend_confidence"] = 0
