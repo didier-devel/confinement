@@ -4,5 +4,8 @@ Ce repository contient un notebook évaluant la vigueur de l'épidémie de COVID
 
    * notebook/confinement.ipynb : Estimation à partir des données du 17 avril
    * notebook/update.ipynb: Evolution des courbes des hospitalisations et comparaison par rapport aux estimations.
+   * src/trends.py: Tendances des hospitalisations par région et par département.
 
 Les deux notebooks sont visibles sur www.estellenn.com/notebooks/confinement/ et www.estellenn.com/notebooks/confinement/update.html .
+
+Les tendances des hospitalisations sont mises à jour quotidiennement et visibles sur www.estellenn.com/notebooks/deconfinement/ .
