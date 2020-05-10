@@ -122,7 +122,7 @@ def plot_non_zero(ax, logScale, df, col, label):
     
     ax.plot(df[col_draw], label=label)
 
-def make_curve(urgence, hosp, src_urgence, roll_urg, roll_hosp, file_radical, df_row, label, logScale):
+def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll_hosp, file_radical, df_row, label, logScale):
     # Plot
     fig = plt.figure(figsize=(10,6))
     ax = plt.axes()
@@ -142,6 +142,9 @@ def make_curve(urgence, hosp, src_urgence, roll_urg, roll_hosp, file_radical, df
         if has_reg:
             ax.plot(urgence["pred_hosp"], "--", label="Tendance hospitalisations quotidiennes -- données urgences", color="orange")
             ax.fill_between(urgence.index, urgence["pred_max"], urgence["pred_min"],color="orange",alpha=0.3, label="Intervalle de confiance")
+            # En plus foncé sur la zone de prediction
+            pred_index = urgence.index.difference(urg_index, sort=False)
+            ax.fill_between(pred_index, urgence.loc[pred_index, "pred_max"], urgence.loc[pred_index, "pred_min"],color="orange",alpha=0.2)
 
         # Autres données (non utilsées pour la tendance)
         ax.plot(hosp[roll_hosp], label="Nouvelles hospitalisations quotidiennes lissées - données hôpitaux", color="red")        
@@ -151,6 +154,9 @@ def make_curve(urgence, hosp, src_urgence, roll_urg, roll_hosp, file_radical, df
         if has_reg:
             ax.plot(hosp["pred_hosp"], "--", label="Tendance hospitalisations quotidiennes - données hôpitaux", color="orange")
             ax.fill_between(hosp.index, hosp["pred_max"], hosp["pred_min"],color="orange",alpha=0.3, label="Intervalle de confiance")
+            # En plus foncé sur la zone de prediction
+            pred_index = hosp.index.difference(hosp_index, sort=False)
+            ax.fill_between(pred_index, hosp.loc[pred_index, "pred_max"], hosp.loc[pred_index,"pred_min"],color="orange",alpha=0.2)
         
     ax.xaxis.set_major_locator(plt.MaxNLocator(10))
     ax.xaxis.set_minor_locator(plt.MultipleLocator(1))
@@ -311,7 +317,7 @@ def make_data(urgence, hosp, file_radical, df_row, label):
         urg_index, urg_timeToDouble, urgence = make_trend(urgence, "nbre_hospit_corona", roll_urg, recent_hist)
     else:
         # Python interpreter complains if the value is not assigned
-        use_raw_urg = None
+        urg_index = None
         
     hosp_index, hosp_timeToDouble, hosp = make_trend(hosp, "incid_hosp", roll_hosp, recent_hist)
 
@@ -353,8 +359,8 @@ def make_data(urgence, hosp, file_radical, df_row, label):
 
 
         
-    make_curve(urgence, hosp, src_urgence, roll_urg, roll_hosp, file_radical, df_row, label, True)
-    make_curve(urgence, hosp, src_urgence, roll_urg, roll_hosp, file_radical, df_row, label, False)
+    make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll_hosp, file_radical, df_row, label, True)
+    make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll_hosp, file_radical, df_row, label, False)
     
     
 
