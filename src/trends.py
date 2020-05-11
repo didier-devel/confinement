@@ -309,8 +309,10 @@ def make_data(urgence, hosp, file_radical, df_row, label):
     if src_urgence:
         df_row["hosp_rate_urgence"] =  urgence[urgence[roll_urg] > 0 ][roll_urg][-1] 
         df_row["hosp_rate_all"] = hosp[hosp[roll_hosp] > 0 ][roll_hosp][-1]
+        df_row["rate_date"] = urgence[urgence[roll_urg] > 0 ].index[-1] 
     else:
         df_row["hosp_rate_all"] = hosp[hosp[roll_hosp] > 0 ][roll_hosp][-1]
+        df_row["rate_date"] = hosp[hosp[roll_hosp] > 0 ].index[-1]
 
     # make_trend modifies the dataframe (it extends the index) so we need to update the df variables
     if src_urgence:
@@ -364,7 +366,7 @@ def make_data(urgence, hosp, file_radical, df_row, label):
     
     
 
-common_fields = ["log_curve", "lin_curve","timeToDouble", "reg_start", "reg_end", "cont_start", "cont_end", "hosp_rate_urgence", "hosp_rate_all", "trend_confidence"]
+common_fields = ["log_curve", "lin_curve","timeToDouble", "reg_start", "reg_end", "cont_start", "cont_end", "rate_date", "hosp_rate_urgence", "hosp_rate_all", "trend_confidence"]
 
 fr_summary = pd.DataFrame(index=["France"],columns=["data_date"] + common_fields)
 fr_summary.loc["France","data_date"] = data_date.strftime("%d/%m/%Y %H:%M")
