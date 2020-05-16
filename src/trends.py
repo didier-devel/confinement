@@ -143,7 +143,8 @@ def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll
             ax.plot(urgence["pred_hosp"], "--", label="Tendance hospitalisations quotidiennes -- données urgences", color="orange")
             ax.fill_between(urgence.index, urgence["pred_max"], urgence["pred_min"],color="orange",alpha=0.3, label="Intervalle de confiance")
             # En plus foncé sur la zone de prediction
-            pred_index = urgence.index.difference(urg_index, sort=False)
+            reg_end = urg_index[-1]
+            pred_index = urgence.index[urgence.index.get_loc(reg_end) + 1 :]
             ax.fill_between(pred_index, urgence.loc[pred_index, "pred_max"], urgence.loc[pred_index, "pred_min"],color="orange",alpha=0.2)
 
         # Autres données (non utilsées pour la tendance)
@@ -155,7 +156,8 @@ def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll
             ax.plot(hosp["pred_hosp"], "--", label="Tendance hospitalisations quotidiennes - données hôpitaux", color="orange")
             ax.fill_between(hosp.index, hosp["pred_max"], hosp["pred_min"],color="orange",alpha=0.3, label="Intervalle de confiance")
             # En plus foncé sur la zone de prediction
-            pred_index = hosp.index.difference(hosp_index, sort=False)
+            reg_end = hosp_index[-1]
+            pred_index = hosp.index[hosp.index.get_loc(reg_end) + 1 :]
             ax.fill_between(pred_index, hosp.loc[pred_index, "pred_max"], hosp.loc[pred_index,"pred_min"],color="orange",alpha=0.2)
         
     ax.xaxis.set_major_locator(plt.MaxNLocator(10))
