@@ -136,8 +136,24 @@ def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll
     ax.tick_params(labeltop=False, labelright=True)
 
     if src_urgence:
-        #plot_non_zero(ax, logScale, urgence, "nbre_hospit_corona", "Nouvelles hospitalisations quotidiennes - données urgences")
-        ax.bar(urgence.index, urgence["nbre_hospit_corona"], label = "Nouvelles hospitalisations quotidiennes - données urgences", alpha=0.3, color="blue")
+        # Afficher differement la donnée du dernier jour, car tout n'est pas encore remonté. Ce jour n'est pas pris en
+        # compte pour calculer la tendance
+        urgence["valid_hosp"] = np.nan
+        urgence["uncertain_hosp"] = np.nan
+        urgence.loc[urgence.index[:urgence.index.get_loc(urg_index[-1])+1], "valid_hosp"] = urgence["nbre_hospit_corona"]
+        last_day = urgence.index[urgence.index.get_loc(urg_index[-1]) + 1]
+        urgence.loc[last_day,"uncertain_hosp"] = urgence.loc[last_day,"nbre_hospit_corona"]
+        ax.bar(urgence.index,
+               urgence["valid_hosp"],
+               label = "Nouvelles hospitalisations quotidiennes - données urgences",
+               alpha=0.3,
+               color="blue")
+        ax.bar(urgence.index,
+               urgence["uncertain_hosp"],
+               alpha=0.2,
+               edgecolor="black",
+               linestyle="--",
+               color="blue")
         ax.plot(urgence[roll_urg], label="Nouvelles hospitalisations quotidiennes lissées - données urgences", color="orange")
         if has_reg:
             ax.plot(urgence["pred_hosp"], "--", label="Tendance hospitalisations quotidiennes -- données urgences", color="orange")
@@ -150,7 +166,31 @@ def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll
         # Autres données (non utilsées pour la tendance)
         ax.plot(hosp[roll_hosp], label="Nouvelles hospitalisations quotidiennes lissées - données hôpitaux", color="red")        
     else:
-        ax.bar(hosp.index, hosp["incid_hosp"], label = "Nouvelles hospitalisations quotidiennes - données hôpitaux", alpha=0.3, color="blue")
+        if has_reg:
+            # Afficher differement la donnée du dernier jour, car tout n'est pas encore remonté. Ce jour n'est pas pris en
+            # compte pour calculer la tendance
+            hosp["valid_hosp"] = np.nan
+            hosp["uncertain_hosp"] = np.nan
+            hosp.loc[hosp.index[:hosp.index.get_loc(hosp_index[-1])+1], "valid_hosp"] = hosp["incid_hosp"]
+            last_day = hosp.index[hosp.index.get_loc(hosp_index[-1]) + 1]
+            hosp.loc[last_day,"uncertain_hosp"] = hosp.loc[last_day,"incid_hosp"]
+            ax.bar(hosp.index,
+                   hosp["valid_hosp"],
+                   label = "Nouvelles hospitalisations quotidiennes - données hôpitaux",
+                   alpha=0.3,
+                   color="blue")
+            ax.bar(hosp.index,
+                   hosp["uncertain_hosp"],
+                   alpha=0.2,
+                   color="blue")
+        else:
+            # Le dernier jour n'est pas facile à avoir ici. Pas affiché. Mais de toute façon, il n'y a pas de tendance calculée.
+            ax.bar(hosp.index,
+                   hosp["incid_hosp"],
+                   label = "Nouvelles hospitalisations quotidiennes - données hôpitaux",
+                   alpha=0.3,
+                   color="blue")
+
         ax.plot(hosp[roll_hosp], label="Nouvelles hospitalisations quotidiennes lissées - données hôpitaux", color="orange")
         if has_reg:
             ax.plot(hosp["pred_hosp"], "--", label="Tendance hospitalisations quotidiennes - données hôpitaux", color="orange")
@@ -200,7 +240,7 @@ def aggregate(df_source, date_col):
         
     return df_source
     
-def make_rolling(df_source, col, recent_hist):
+def make_rolling(df_source, col):
     roll_col = "rolling_%s"%col
     nnz_col = "nnz_%s"%col
 
@@ -214,10 +254,17 @@ def make_rolling(df_source, col, recent_hist):
 
     return roll_col
 
+
+def extract_recent(source, history, use_latest):
+    if use_latest:
+        return source.iloc[-history:]
+    else:
+        return source.iloc[-history-1:-1]
+    
+
 def make_trend(df_source, hosp_col, roll_col, recent_hist):
 
-
-    recent = df_source.iloc[-recent_hist:]
+    recent = extract_recent(df_source, recent_hist, False)
     nullVals = len(recent[recent[hosp_col] == 0])
 
     if nullVals == 0:
@@ -233,8 +280,6 @@ def make_trend(df_source, hosp_col, roll_col, recent_hist):
             recent_hist *= 2
         else:
             recent_hist = int(recent_hist*1.5)
-        # Update null vals
-        recent = df_source.iloc[-recent_hist:]
 
         
     # Ajouter une colonne de numéro de jour
@@ -242,7 +287,7 @@ def make_trend(df_source, hosp_col, roll_col, recent_hist):
 
 
     
-    for_regression = df_source.iloc[-recent_hist:]
+    for_regression = extract_recent(df_source, recent_hist,False)
     # Si pas assez de données ne pas générer de tendance
     if len(for_regression[for_regression[reg_col] > 0]) < recent_hist*0.5:
         return None, None, df_source
@@ -300,12 +345,13 @@ def make_data(urgence, hosp, file_radical, df_row, label):
     recent_hist  = 15
 
     recent = urgence.loc[urgence.index[-recent_hist:]]
+    recent = extract_recent(urgence, recent_hist, False)
     # Si trop de valeurs sont nulles dans les données urgence,
     # on utilise les données hospitalières
     src_urgence = True if len(recent[recent["nbre_hospit_corona"] == 0]) <= recent_hist * 0.7 else False
 
-    roll_urg = make_rolling(urgence, "nbre_hospit_corona", recent_hist)
-    roll_hosp = make_rolling(hosp, "incid_hosp", recent_hist)
+    roll_urg = make_rolling(urgence, "nbre_hospit_corona")
+    roll_hosp = make_rolling(hosp, "incid_hosp")
 
     # On utilise le dernier jour de la moyenne lissée pour indiquer le nombre d'hospitalisations par jour
     if src_urgence:
