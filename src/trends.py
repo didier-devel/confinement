@@ -136,24 +136,33 @@ def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll
     ax.tick_params(labeltop=False, labelright=True)
 
     if src_urgence:
-        # Afficher differement la donnée du dernier jour, car tout n'est pas encore remonté. Ce jour n'est pas pris en
-        # compte pour calculer la tendance
-        urgence["valid_hosp"] = np.nan
-        urgence["uncertain_hosp"] = np.nan
-        urgence.loc[urgence.index[:urgence.index.get_loc(urg_index[-1])+1], "valid_hosp"] = urgence["nbre_hospit_corona"]
-        last_day = urgence.index[urgence.index.get_loc(urg_index[-1]) + 1]
-        urgence.loc[last_day,"uncertain_hosp"] = urgence.loc[last_day,"nbre_hospit_corona"]
-        ax.bar(urgence.index,
-               urgence["valid_hosp"],
-               label = "Nouvelles hospitalisations quotidiennes - données urgences",
-               alpha=0.3,
-               color="blue")
-        ax.bar(urgence.index,
-               urgence["uncertain_hosp"],
-               alpha=0.2,
-               edgecolor="black",
-               linestyle="--",
-               color="blue")
+        if has_reg:
+            # Afficher differement la donnée du dernier jour, car tout n'est pas encore remonté. Ce jour n'est pas pris en
+            # compte pour calculer la tendance
+            urgence["valid_hosp"] = np.nan
+            urgence["uncertain_hosp"] = np.nan
+            urgence.loc[urgence.index[:urgence.index.get_loc(urg_index[-1])+1], "valid_hosp"] = urgence["nbre_hospit_corona"]
+            last_day = urgence.index[urgence.index.get_loc(urg_index[-1]) + 1]
+            urgence.loc[last_day,"uncertain_hosp"] = urgence.loc[last_day,"nbre_hospit_corona"]
+            ax.bar(urgence.index,
+                   urgence["valid_hosp"],
+                   label = "Nouvelles hospitalisations quotidiennes - données urgences",
+                   alpha=0.3,
+                   color="blue")
+            ax.bar(urgence.index,
+                   urgence["uncertain_hosp"],
+                   alpha=0.2,
+                   edgecolor="black",
+                   linestyle="--",
+                   color="blue")
+        else:
+            # Le dernier jour n'est pas facile à avoir ici. Pas affiché. Mais de toute façon, il n'y a pas de tendance calculée.
+            ax.bar(urgence.index,
+                   urgence["nbre_hospit_corona"],
+                   label = "Nouvelles hospitalisations quotidiennes - données urgences",
+                   alpha=0.3,
+                   color="blue")
+
         ax.plot(urgence[roll_urg], label="Nouvelles hospitalisations quotidiennes lissées - données urgences", color="orange")
         if has_reg:
             ax.plot(urgence["pred_hosp"], "--", label="Tendance hospitalisations quotidiennes -- données urgences", color="orange")
@@ -382,10 +391,14 @@ def make_data(urgence, hosp, file_radical, df_row, label):
         df_row["cont_end"]=urgence.index[cont_end_loc] if urg_index is not None else None
         df_row["cont_start"]=urgence.index[cont_start_loc] if urg_index is not None else None
         df_row["timeToDouble"] = urg_timeToDouble
-        if urgence["pred_max"][-1] > df_row["hosp_rate_urgence"]*2 and urgence["pred_min"][-1] < df_row["hosp_rate_urgence"]/2.:
-            df_row["trend_confidence"] = 0
+        if df_row["reg_start"] is not None:
+            if urgence["pred_max"][-1] > df_row["hosp_rate_urgence"]*2 and urgence["pred_min"][-1] < df_row["hosp_rate_urgence"]/2.:
+                df_row["trend_confidence"] = 0
+            else:
+                df_row["trend_confidence"] = 1
         else:
-            df_row["trend_confidence"] = 1
+            # Pas de tendance s'il n'y avait pas assez de données pour la calculer
+            df_row["trend_confidence"] = 0
 
     else:
         df_row["reg_start"] = hosp_index[0] if hosp_index is not None else None
@@ -396,13 +409,13 @@ def make_data(urgence, hosp, file_radical, df_row, label):
         df_row["cont_start"]=hosp.index[cont_start_loc] if hosp_index is not None else None
         df_row["timeToDouble"] = hosp_timeToDouble
         if df_row["reg_start"] is not None:
-            # Pas de tendance s'il n'y avait pas assez de données pour la calculer
             df_row["trend_confidence"] = 0
             if hosp["pred_max"][-1] > df_row["hosp_rate_all"]*2 and hosp["pred_min"][-1] < df_row["hosp_rate_all"]/2.:
                 df_row["trend_confidence"] = 0
             else:
                 df_row["trend_confidence"] = 1
         else:
+            # Pas de tendance s'il n'y avait pas assez de données pour la calculer
             df_row["trend_confidence"] = 0
 
 
