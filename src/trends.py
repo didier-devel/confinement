@@ -356,9 +356,9 @@ def make_data(urgence, hosp, file_radical, df_row, label):
 
     recent = urgence.loc[urgence.index[-recent_hist:]]
     recent = extract_recent(urgence, recent_hist, False)
-    # Si trop de valeurs sont nulles dans les données urgence,
-    # on utilise les données hospitalières
-    src_urgence = True if len(recent[recent["nbre_hospit_corona"] == 0]) <= recent_hist * 0.7 else False
+
+    # Utilisation des données urgence si au moins un cas est reporté dans la "période récente"
+    src_urgence = len(recent[recent["nbre_hospit_corona"] > 0]) >= 1
 
     roll_urg = make_rolling(urgence, "nbre_hospit_corona")
     roll_hosp = make_rolling(hosp, "incid_hosp")
