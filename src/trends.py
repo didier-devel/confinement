@@ -146,7 +146,7 @@ def make_hosp_bars(has_reg, df_source, hosp_col, reg_index, source_label, ax):
     else:
         # Le dernier jour n'est pas facile à avoir ici. Pas affiché. Mais de toute façon, il n'y a pas de tendance calculée.
         ax.bar(df_source.index,
-               df_source["nbre_hospit_corona"],
+               df_source[hosp_col],
                label = "Nouvelles hospitalisations quotidiennes - données %s"%source_label,
                alpha=0.3,
                color="blue")
