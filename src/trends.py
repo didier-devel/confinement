@@ -37,7 +37,7 @@ def downloadIfNeeded(fileName):
 
 urgence_data = os.path.join(datagouv_path,"department_latest.csv")
 downloadIfNeeded(urgence_data)    
-urgence_df = pd.read_csv(urgence_data)
+urgence_df = pd.read_csv(urgence_data, sep=";", dtype= {'dep':'object'})
 
 hosp_data = os.path.join(datagouv_path,"donnees_hospitalieres_latest.csv")
 downloadIfNeeded(hosp_data)    
