@@ -204,7 +204,8 @@ def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll
     if logScale:
         plt.yscale("log")
         # Same scale for log curves
-        ax.set_ylim(0.1,3000)
+        # Limit high enough to let room for the legend 
+        ax.set_ylim(0.1,50000)
     else:
         if has_reg:
             # Protection contre les prédiction trop divergeantes
