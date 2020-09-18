@@ -8,6 +8,7 @@ import scipy
 import math
 import sys
 
+import locator
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 proj_path = os.path.abspath(os.path.join(file_path,".."))
@@ -193,7 +194,8 @@ def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll
             pred_index = hosp.index[hosp.index.get_loc(reg_end) + 1 :]
             ax.fill_between(pred_index, hosp.loc[pred_index, "pred_max"], hosp.loc[pred_index,"pred_min"],color="orange",alpha=0.2)
         
-    ax.xaxis.set_major_locator(plt.MaxNLocator(10))
+    #ax.xaxis.set_major_locator(plt.MaxNLocator(10))
+    ax.xaxis.set_major_locator(locator.FirstOfMonthLocator())
     ax.xaxis.set_minor_locator(plt.MultipleLocator(1))
     ax.legend()
 
