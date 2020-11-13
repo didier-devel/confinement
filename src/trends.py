@@ -70,6 +70,8 @@ urgence_df["reg"] = urgence_df["dep"].apply(lambda x: depts.loc[x].reg if pd.not
 urgence_df["reg_name"] = urgence_df["reg"].apply(lambda x: regs.loc[x].libelle if pd.notnull(x) else None)
 
 # Ajouter nom de département, code région, nom région dans les données des hospitalières
+hosp_df["dep"] = hosp_df["dep"].apply(lambda x: x if len(x) > 1 else '0'+x)
+
 hosp_df["dep_name"] = hosp_df["dep"].apply(lambda x: depts.loc[str(x)].libelle if pd.notnull(x) else None)
 hosp_df["reg"] = hosp_df["dep"].apply(lambda x: depts.loc[x].reg if pd.notnull(x) else None)
 hosp_df["reg_name"] = hosp_df["reg"].apply(lambda x: regs.loc[x].libelle if pd.notnull(x) else None)
