@@ -201,7 +201,7 @@ def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll
         
     #ax.xaxis.set_major_locator(plt.MaxNLocator(10))
     ax.xaxis.set_major_locator(locator.FirstOfMonthLocator())
-    ax.xaxis.set_minor_locator(plt.MultipleLocator(1))
+    #ax.xaxis.set_minor_locator(plt.MultipleLocator(1))
     ax.legend()
 
     if src_urgence:
