@@ -13,6 +13,8 @@ class FirstOfMonthLocator(plt.Locator):
             date = self.axis.major.formatter(d,0);
             day = date[:2]
             month = date[3:5]
+            if not month.isdigit():
+                continue
             m = int(month)%2
             if day == "01" and m == 0:
                 result.append(d)
