@@ -50,7 +50,7 @@ data_date = datetime.fromtimestamp(last_modified_ts)
 
 
 #extraire les données toutes classe d'age
-urgence_df = urgence_df[urgence_df["sursaud_cl_age_corona"] == "0"].copy()
+urgence_df = urgence_df[urgence_df["sursaud_cl_age_corona"] == 0].copy()
 
 # Lire le fichier des code département
 depts = pd.read_csv(os.path.join(datagouv_path,"departement2020.csv"))
