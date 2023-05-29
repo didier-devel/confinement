@@ -40,9 +40,11 @@ urgence_data = os.path.join(datagouv_path,"department_latest.csv")
 downloadIfNeeded(urgence_data)    
 urgence_df = pd.read_csv(urgence_data, sep=";", dtype= {'dep':'object'})
 
+
 hosp_data = os.path.join(datagouv_path,"donnees_hospitalieres_latest.csv")
 downloadIfNeeded(hosp_data)    
 hosp_df = pd.read_csv(hosp_data, sep=';')
+
 
 # Heure des données (wget garde le mtime du site web)
 last_modified_ts = os.path.getmtime(urgence_data)
@@ -68,6 +70,7 @@ regs.drop("reg", axis=1, inplace=True)
 urgence_df["dep_name"] = urgence_df["dep"].apply(lambda x: depts.loc[str(x)].libelle if pd.notnull(x) else None)
 urgence_df["reg"] = urgence_df["dep"].apply(lambda x: depts.loc[x].reg if pd.notnull(x) else None)
 urgence_df["reg_name"] = urgence_df["reg"].apply(lambda x: regs.loc[x].libelle if pd.notnull(x) else None)
+
 
 # Ajouter nom de département, code région, nom région dans les données des hospitalières
 hosp_df["dep"] = hosp_df["dep"].apply(lambda x: x if len(x) > 1 else '0'+x)
@@ -159,6 +162,9 @@ def make_hosp_bars(has_reg, df_source, hosp_col, reg_index, source_label, ax):
         
     
 def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll_hosp, file_radical, df_row, label, logScale):
+
+
+    
     # Plot
     fig = plt.figure(figsize=(10,6))
     ax = plt.axes()
@@ -185,7 +191,8 @@ def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll
             ax.fill_between(pred_index, urgence.loc[pred_index, "pred_max"], urgence.loc[pred_index, "pred_min"],color="orange",alpha=0.2)
 
         # Autres données (non utilsées pour la tendance)
-        ax.plot(hosp[roll_hosp], label="Nouvelles hospitalisations quotidiennes lissées - données hôpitaux", color="red")        
+        # Ne plus afficher les données hospitalieres (plus mise a jour - mai 2023)
+        #ax.plot(hosp[roll_hosp], label="Nouvelles hospitalisations quotidiennes lissées - données hôpitaux", color="red")
     else:
         make_hosp_bars(has_reg, hosp, "incid_hosp", hosp_index, "hôpitaux", ax)
         
@@ -205,8 +212,8 @@ def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll
     ax.legend()
 
     if src_urgence:
-        # Pour utiliser cette limite pour les données hospitalières, il faudrait étendre l'index vers le 24 février.
-        ax.set_xlim(left = "24/02/20", right=urgence.index[-1])
+        # Utilisation de la plage de donnée des urgences
+        ax.set_xlim(left = urgence.index[0], right=urgence.index[-1])
 
     if logScale:
         plt.yscale("log")
@@ -230,6 +237,7 @@ def make_curve(urgence, urg_index, hosp, hosp_index, src_urgence, roll_urg, roll
     plt.savefig(os.path.join(datagen_path,file_name))
     df_row["log_curve" if logScale else "lin_curve"] = file_name
     plt.close()
+
     
 
 def aggregate(df_source, date_col):
@@ -366,16 +374,26 @@ def make_data(urgence, hosp, file_radical, df_row, label):
     recent = extract_recent(urgence, recent_hist, False)
 
     # Utilisation des données urgence si au moins un cas est reporté dans la "période récente"
-    src_urgence = len(recent[recent["nbre_hospit_corona"] > 0]) >= 1
+    #src_urgence = len(recent[recent["nbre_hospit_corona"] > 0]) >= 1
+    src_urgence=True  # Plus de données hospitalieres mise a jour
+    
 
     roll_urg = make_rolling(urgence, "nbre_hospit_corona")
     roll_hosp = make_rolling(hosp, "incid_hosp")
 
     # On utilise le dernier jour de la moyenne lissée pour indiquer le nombre d'hospitalisations par jour
     if src_urgence:
-        df_row["hosp_rate_urgence"] =  urgence[urgence[roll_urg] > 0 ][roll_urg][-1] 
-        df_row["hosp_rate_all"] = hosp[hosp[roll_hosp] > 0 ][roll_hosp][-1]
-        df_row["rate_date"] = urgence[urgence[roll_urg] > 0 ].index[-1] 
+        try:
+            df_row["hosp_rate_urgence"] =  urgence[urgence[roll_urg] > 0 ][roll_urg][-1]
+        except:
+            df_row["hosp_rate_urgence"] =  np.nan # Si pas de donnée
+#        df_row["hosp_rate_all"] = hosp[hosp[roll_hosp] > 0 ][roll_hosp][-1]
+        df_row["hosp_rate_all"] = np.nan  # Donnees hospitalieres plus mise à jour
+        try:
+            df_row["rate_date"] = urgence[urgence[roll_urg] > 0 ].index[-1]
+        except:
+            df_row["rate_date"] = np.nan
+            
     else:
         df_row["hosp_rate_all"] = hosp[hosp[roll_hosp] > 0 ][roll_hosp][-1]
         df_row["rate_date"] = hosp[hosp[roll_hosp] > 0 ].index[-1]
